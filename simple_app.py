@@ -4,6 +4,10 @@ import json
 import os
 import shutil
 from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 # Set page configuration
 st.set_page_config(
@@ -232,7 +236,7 @@ def main():
             st.session_state.user_name = user_name
         
         st.caption("Choose a section:")
-        tabs = ["Evaluate Documents", "View All Evaluations"]
+        tabs = ["Evaluate Documents", "View All Evaluations", "Result Analysis"]
         selected_tab = st.radio("Navigation", tabs)
     
     # Load data
@@ -528,6 +532,209 @@ def main():
                 file_name="document_evaluations_simple.csv",
                 mime="text/csv"
             )
+    
+    elif selected_tab == "Result Analysis":
+        st.title("Result Analysis")
+        
+        if evaluations_df.empty:
+            st.info("No evaluations have been completed yet. Evaluate some documents to see analysis.")
+            return
+        
+        # Merge dataframes to get all model predictions along with human evaluations
+        merged_df = pd.merge(
+            evaluations_df, 
+            df[['doc_id', 'doc_type_nl_gemini', 'doc_type_nl_deepseek', 'doc_type_nl_chatgpt', 
+                'subject_nl_gemini', 'subject_nl_deepseek', 'subject_nl_chatgpt']], 
+            on='doc_id', 
+            how='left'
+        )
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["Model Accuracy", "Confusion Matrices", "Agreement Analysis", "Evaluator Statistics"])
+        
+        with tab1:
+            st.subheader("Model Accuracy Analysis")
+            
+            # Calculate accuracy for document type
+            doc_type_accuracy = {}
+            for model in ['gemini', 'deepseek', 'chatgpt']:
+                model_col = f'doc_type_nl_{model}'
+                correct = merged_df[model_col] == merged_df['selected_doc_type']
+                accuracy = correct.mean() * 100
+                doc_type_accuracy[model] = accuracy
+            
+            # Calculate accuracy for subject
+            subject_accuracy = {}
+            for model in ['gemini', 'deepseek', 'chatgpt']:
+                model_col = f'subject_nl_{model}'
+                correct = merged_df[model_col] == merged_df['selected_subject']
+                accuracy = correct.mean() * 100
+                subject_accuracy[model] = accuracy
+            
+            # Plot document type accuracy
+            st.write("### Document Type Prediction Accuracy")
+            doc_type_df = pd.DataFrame({
+                'Model': list(doc_type_accuracy.keys()),
+                'Accuracy (%)': list(doc_type_accuracy.values())
+            })
+            
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.barplot(x='Model', y='Accuracy (%)', data=doc_type_df, ax=ax)
+            ax.set_ylim(0, 100)
+            ax.set_title('Document Type Prediction Accuracy by Model')
+            st.pyplot(fig)
+            
+            # Plot subject accuracy
+            st.write("### Subject Prediction Accuracy")
+            subject_df = pd.DataFrame({
+                'Model': list(subject_accuracy.keys()),
+                'Accuracy (%)': list(subject_accuracy.values())
+            })
+            
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.barplot(x='Model', y='Accuracy (%)', data=subject_df, ax=ax)
+            ax.set_ylim(0, 100)
+            ax.set_title('Subject Prediction Accuracy by Model')
+            st.pyplot(fig)
+        
+        with tab2:
+            st.subheader("Confusion Matrices")
+            
+            # Function to create and display confusion matrix
+            def plot_confusion_matrix(y_true, y_pred, title):
+                # Get unique labels
+                labels = sorted(list(set(y_true) | set(y_pred)))
+                
+                # Create confusion matrix
+                cm = confusion_matrix(y_true, y_pred, labels=labels)
+                
+                # Plot
+                fig, ax = plt.subplots(figsize=(12, 10))
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                           xticklabels=labels, yticklabels=labels, ax=ax)
+                plt.xlabel('Predicted')
+                plt.ylabel('True')
+                plt.title(title)
+                plt.xticks(rotation=45, ha='right')
+                plt.yticks(rotation=0)
+                plt.tight_layout()
+                return fig
+            
+            # Document Type Confusion Matrices
+            st.write("### Document Type Confusion Matrices")
+            
+            model_selection = st.selectbox(
+                "Select Model for Document Type Confusion Matrix",
+                options=['gemini', 'deepseek', 'chatgpt']
+            )
+            
+            # Filter out rows with missing values for the selected model
+            filtered_df = merged_df.dropna(subset=[f'doc_type_nl_{model_selection}', 'selected_doc_type'])
+            
+            if len(filtered_df) > 0:
+                cm_fig = plot_confusion_matrix(
+                    filtered_df['selected_doc_type'], 
+                    filtered_df[f'doc_type_nl_{model_selection}'],
+                    f'Confusion Matrix for {model_selection.capitalize()} - Document Type'
+                )
+                st.pyplot(cm_fig)
+            else:
+                st.warning(f"Not enough data to create confusion matrix for {model_selection} document type predictions.")
+            
+            # Subject Confusion Matrices
+            st.write("### Subject Confusion Matrices")
+            
+            subject_model_selection = st.selectbox(
+                "Select Model for Subject Confusion Matrix",
+                options=['gemini', 'deepseek', 'chatgpt']
+            )
+            
+            # Filter out rows with missing values for the selected model
+            subject_filtered_df = merged_df.dropna(subset=[f'subject_nl_{subject_model_selection}', 'selected_subject'])
+            
+            if len(subject_filtered_df) > 0:
+                subject_cm_fig = plot_confusion_matrix(
+                    subject_filtered_df['selected_subject'], 
+                    subject_filtered_df[f'subject_nl_{subject_model_selection}'],
+                    f'Confusion Matrix for {subject_model_selection.capitalize()} - Subject'
+                )
+                st.pyplot(subject_cm_fig)
+            else:
+                st.warning(f"Not enough data to create confusion matrix for {subject_model_selection} subject predictions.")
+        
+        with tab3:
+            st.subheader("Agreement Analysis")
+            
+            # Document Type Agreement
+            st.write("### Document Type Prediction Agreement Between Models")
+            
+            # Create agreement matrix for document type
+            doc_type_models = ['gemini', 'deepseek', 'chatgpt', 'human']
+            doc_type_cols = ['doc_type_nl_gemini', 'doc_type_nl_deepseek', 'doc_type_nl_chatgpt', 'selected_doc_type']
+            
+            # Rename columns for the agreement calculation
+            agreement_df = merged_df[doc_type_cols].copy()
+            agreement_df.columns = doc_type_models
+            
+            # Calculate agreement matrix
+            agreement_matrix = np.zeros((len(doc_type_models), len(doc_type_models)))
+            
+            for i, model1 in enumerate(doc_type_models):
+                for j, model2 in enumerate(doc_type_models):
+                    # Calculate agreement percentage
+                    agreement = (agreement_df[model1] == agreement_df[model2]).mean() * 100
+                    agreement_matrix[i, j] = agreement
+            
+            # Plot agreement heatmap
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sns.heatmap(agreement_matrix, annot=True, fmt='.1f', cmap='YlGnBu',
+                       xticklabels=doc_type_models, yticklabels=doc_type_models, ax=ax)
+            ax.set_title('Document Type Agreement Between Models (%)')
+            st.pyplot(fig)
+            
+            # Subject Agreement
+            st.write("### Subject Prediction Agreement Between Models")
+            
+            # Create agreement matrix for subject
+            subject_models = ['gemini', 'deepseek', 'chatgpt', 'human']
+            subject_cols = ['subject_nl_gemini', 'subject_nl_deepseek', 'subject_nl_chatgpt', 'selected_subject']
+            
+            # Rename columns for the agreement calculation
+            subject_agreement_df = merged_df[subject_cols].copy()
+            subject_agreement_df.columns = subject_models
+            
+            # Calculate agreement matrix
+            subject_agreement_matrix = np.zeros((len(subject_models), len(subject_models)))
+            
+            for i, model1 in enumerate(subject_models):
+                for j, model2 in enumerate(subject_models):
+                    # Calculate agreement percentage
+                    agreement = (subject_agreement_df[model1] == subject_agreement_df[model2]).mean() * 100
+                    subject_agreement_matrix[i, j] = agreement
+            
+            # Plot agreement heatmap
+            fig, ax = plt.subplots(figsize=(10, 8))
+            sns.heatmap(subject_agreement_matrix, annot=True, fmt='.1f', cmap='YlGnBu',
+                       xticklabels=subject_models, yticklabels=subject_models, ax=ax)
+            ax.set_title('Subject Agreement Between Models (%)')
+            st.pyplot(fig)
+        
+        with tab4:
+            st.subheader("Evaluator Statistics")
+            
+            # Count documents evaluated by each evaluator
+            evaluator_counts = evaluations_df['evaluator'].value_counts().reset_index()
+            evaluator_counts.columns = ['Evaluator', 'Documents Evaluated']
+            
+            # Create a bar chart
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.barplot(x='Evaluator', y='Documents Evaluated', data=evaluator_counts, ax=ax)
+            ax.set_title('Number of Documents Evaluated by Each Evaluator')
+            plt.xticks(rotation=45, ha='right')
+            st.pyplot(fig)
+            
+            # Display as a table
+            st.write("### Evaluator Activity Table")
+            st.dataframe(evaluator_counts, use_container_width=True)
 
 # Run the app
 if __name__ == "__main__":
