@@ -554,25 +554,34 @@ def main():
                     """,
                     unsafe_allow_html=True
                 )
+            
+            # Show warning if button is clicked
+            if delete_button:
+                st.warning("⚠️ Warning: This will permanently delete all evaluation data. This action cannot be undone.")
+                confirm_delete = st.button(
+                    "Yes, Delete All Evaluations", 
+                    type="primary",
+                    key="confirm_delete"
+                )
                 
-                # Show warning if button is clicked
-                if delete_button:
-                    st.warning("⚠️ Warning: This will permanently delete all evaluation data. This action cannot be undone.")
-                    confirm_delete = st.button(
-                        "Yes, Delete All Evaluations", 
-                        type="primary",
-                        key="confirm_delete"
-                    )
+                if confirm_delete:
+                    # Create empty dataframe with the same columns
+                    empty_df = pd.DataFrame(columns=evaluations_df.columns)
                     
-                    if confirm_delete:
-                        # Create empty dataframe with the same columns
-                        empty_df = pd.DataFrame(columns=evaluations_df.columns)
-                        
-                        # Save the empty dataframe to the evaluation file
+                    # Get the full file path
+                    file_path = os.path.join(DATA_PATH, EVALUATIONS_FILENAME)
+                    
+                    # Save the empty dataframe
+                    if os.path.exists(file_path):
+                        empty_df.to_csv(file_path, index=False)
+                    else:
                         save_data(empty_df, EVALUATIONS_FILENAME)
-                        
-                        st.success("All evaluations have been deleted.")
-                        st.rerun()  # Refresh the page
+                    
+                    st.success("All evaluations have been deleted.")
+                    # Clear the dataframe in the current session
+                    evaluations_df = empty_df
+                    # Force page refresh
+                    st.experimental_rerun()
     
     elif selected_tab == "Result Analysis":
         st.title("Result Analysis")
