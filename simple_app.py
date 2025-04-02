@@ -92,38 +92,35 @@ def get_doc_types_and_topics():
     """Get lists of document types and topics"""
     # This is a simplified version
     doc_types_dutch = [
-        "Agenda", 
-        "Besluitenlijst", 
-        "Notulen", 
-        "Rapport", 
-        "Begroting", 
-        "Jaarverslag", 
-        "Brief", 
         "Persbericht",
-        "Beleidsdocument",
-        "Verordening",
-        "Motie",
-        "Amendement",
-        "Aanvraag",
-        "Bezwaarschrift",
-        "Overeenkomst",
+        "Rapport",
+        "Beleidsnota",
+        "Wetgeving",
+        "Handleiding",
+        "Begroting",
+        "Notulen",
+        "Brochure",
+        "Formulier",
+        "Brief",
         "Anders"
     ]
     
-    doc_topics_dutch = [
-        "Bestuur en Organisatie",
-        "Financiën en Economie",
-        "Milieu en Duurzaamheid",
-        "Ruimtelijke Ordening",
-        "Verkeer en Vervoer",
+
+    doc_topics_dutch = [     
+        "Gezondheid en Welzijn",
+        "Ruimtelijke Ordening en Infrastructuur",
         "Onderwijs en Cultuur",
-        "Zorg en Welzijn",
-        "Wonen en Bouwen",
-        "Sport en Recreatie",
-        "Openbare Orde en Veiligheid",
+        "Milieu en Duurzaamheid",
+        "Veiligheid en Openbare Orde",
+        "Financiën en Belastingen",
+        "Werkgelegenheid en Sociale Zaken",
+        "Wonen en Huisvesting",
+        "Economie en Ondernemen",
+        "Immigratie en Integratie",
         "Anders"
     ]
     
+
     return doc_types_dutch, doc_topics_dutch
 
 def initialize_evaluations():
