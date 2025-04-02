@@ -125,13 +125,19 @@ def get_doc_types_and_topics():
 
 def initialize_evaluations():
     """Initialize or load the evaluations dataframe"""
+    # Check if cached in session state
+    if 'evaluations_df' in st.session_state:
+        return st.session_state.evaluations_df
+        
     # Check if evaluations file exists in the DATA_PATH
     file_path = os.path.join(DATA_PATH, EVALUATIONS_FILENAME)
     
     try:
         # Try to read the file from the specified location
         if os.path.exists(file_path):
-            return pd.read_csv(file_path)
+            df = pd.read_csv(file_path)
+            st.session_state.evaluations_df = df
+            return df
         
         # If file doesn't exist, create a new DataFrame
         evaluations_df = pd.DataFrame(columns=[
@@ -143,17 +149,54 @@ def initialize_evaluations():
         
         # Save the empty DataFrame to create the file
         save_data(evaluations_df, EVALUATIONS_FILENAME)
+        st.session_state.evaluations_df = evaluations_df
         return evaluations_df
         
     except Exception as e:
         st.error(f"Error initializing evaluations file: {e}")
         # Return an empty DataFrame as fallback
-        return pd.DataFrame(columns=[
+        empty_df = pd.DataFrame(columns=[
             'doc_id', 'file_name',
             'doc_type_gemini', 'doc_type_deepseek', 'doc_type_chatgpt', 'selected_doc_type',
             'subject_gemini', 'subject_deepseek', 'subject_chatgpt', 'selected_subject',
             'notes', 'evaluator', 'evaluation_date'
         ])
+        st.session_state.evaluations_df = empty_df
+        return empty_df
+
+def clear_evaluations():
+    """Clear all evaluations from the file and session state"""
+    # Create empty dataframe with the same columns
+    empty_df = pd.DataFrame(columns=[
+        'doc_id', 'file_name',
+        'doc_type_gemini', 'doc_type_deepseek', 'doc_type_chatgpt', 'selected_doc_type',
+        'subject_gemini', 'subject_deepseek', 'subject_chatgpt', 'selected_subject',
+        'notes', 'evaluator', 'evaluation_date'
+    ])
+    
+    # Update session state first
+    st.session_state.evaluations_df = empty_df
+    
+    # Delete in both possible locations to be sure
+    # 1. Clear the file in the DATA_PATH location
+    file_path = os.path.join(DATA_PATH, EVALUATIONS_FILENAME)
+    try:
+        if os.path.exists(file_path):
+            empty_df.to_csv(file_path, index=False)
+    except Exception as e:
+        st.error(f"Error deleting file at {file_path}: {e}")
+    
+    # 2. Clear the file in the current directory
+    try:
+        if os.path.exists(EVALUATIONS_FILENAME):
+            empty_df.to_csv(EVALUATIONS_FILENAME, index=False)
+    except Exception as e:
+        st.error(f"Error deleting file at {EVALUATIONS_FILENAME}: {e}")
+    
+    # 3. Also try using save_data which handles the proper location
+    save_data(empty_df, EVALUATIONS_FILENAME)
+    
+    return True
 
 def save_evaluation(doc_id, doc_type, subject, notes, evaluator, doc_data):
     """Save document evaluation to the evaluations CSV"""
@@ -209,6 +252,9 @@ def save_evaluation(doc_id, doc_type, subject, notes, evaluator, doc_data):
     try:
         # Save to file with locking to prevent race conditions
         save_data(evaluations_df, EVALUATIONS_FILENAME)
+        
+        # Update the session state with the new dataframe
+        st.session_state.evaluations_df = evaluations_df
     except Exception as e:
         st.error(f"Error saving evaluation: {e}")
         return None
@@ -484,6 +530,12 @@ def main():
     elif selected_tab == "View All Evaluations":
         st.title("All Document Evaluations")
         
+        # Create keys in session state for deletion tracking if they don't exist
+        if 'delete_pressed' not in st.session_state:
+            st.session_state.delete_pressed = False
+        if 'confirm_delete_pressed' not in st.session_state:
+            st.session_state.confirm_delete_pressed = False
+        
         # Load evaluations
         evaluations_df = initialize_evaluations()
         
@@ -555,8 +607,12 @@ def main():
                     unsafe_allow_html=True
                 )
             
-            # Show warning if button is clicked
+            # Handle delete button click
             if delete_button:
+                st.session_state.delete_pressed = True
+            
+            # Show warning if delete button is clicked
+            if st.session_state.delete_pressed:
                 st.warning("⚠️ Warning: This will permanently delete all evaluation data. This action cannot be undone.")
                 confirm_delete = st.button(
                     "Yes, Delete All Evaluations", 
@@ -565,23 +621,17 @@ def main():
                 )
                 
                 if confirm_delete:
-                    # Create empty dataframe with the same columns
-                    empty_df = pd.DataFrame(columns=evaluations_df.columns)
-                    
-                    # Get the full file path
-                    file_path = os.path.join(DATA_PATH, EVALUATIONS_FILENAME)
-                    
-                    # Save the empty dataframe
-                    if os.path.exists(file_path):
-                        empty_df.to_csv(file_path, index=False)
-                    else:
-                        save_data(empty_df, EVALUATIONS_FILENAME)
+                    # Clear evaluations
+                    clear_evaluations()
                     
                     st.success("All evaluations have been deleted.")
-                    # Clear the dataframe in the current session
-                    evaluations_df = empty_df
-                    # Force page refresh
-                    st.experimental_rerun()
+                    
+                    # Reset session state flags and force a complete page rerun
+                    st.session_state.delete_pressed = False
+                    st.session_state.confirm_delete_pressed = False
+                    
+                    # Force reload
+                    st.rerun()
     
     elif selected_tab == "Result Analysis":
         st.title("Result Analysis")
