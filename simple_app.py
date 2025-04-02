@@ -223,8 +223,6 @@ def main():
         st.session_state.doc_types, st.session_state.doc_topics = get_doc_types_and_topics()
     if 'user_name' not in st.session_state:
         st.session_state.user_name = ""
-    if 'history' not in st.session_state:
-        st.session_state.history = []
     
     # App sidebar
     with st.sidebar:
@@ -436,16 +434,15 @@ def main():
         
         with col2:
             back_button = st.button("← Back")
-            if back_button and len(st.session_state.history) > 0:
-                st.session_state.current_index = st.session_state.history.pop()
-                st.rerun()
+            if back_button:
+                # Simply go back one document
+                if st.session_state.current_index > 0:
+                    st.session_state.current_index -= 1
+                    st.rerun()
                 
         with col3:
             next_button = st.button("Next →")
             if next_button:
-                # Save current index to history
-                st.session_state.history.append(st.session_state.current_index)
-                
                 # Find next unevaluated document
                 evaluated_docs = set(evaluations_df['doc_id'].values)
                 next_index = None
