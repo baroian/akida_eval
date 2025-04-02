@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import shutil
 from datetime import datetime
 
 # Set page configuration
@@ -12,15 +13,40 @@ st.set_page_config(
 )
 
 # Constants and configuration
-DATA_PATH = "../"  # Path to data relative to the web app
+STREAMLIT_CLOUD = True  # Set to True when deploying to Streamlit Cloud
+DATA_PATH = "./.streamlit" if STREAMLIT_CLOUD else "../"  # Use .streamlit folder in cloud
 CSV_FILENAME = "df_with_types.csv"
 EVALUATIONS_FILENAME = "evaluations_simple.csv"
 
+# Create .streamlit directory if it doesn't exist (for Streamlit Cloud)
+if STREAMLIT_CLOUD and not os.path.exists(DATA_PATH):
+    os.makedirs(DATA_PATH, exist_ok=True)
+
 # Helper functions
+def sync_data_file():
+    """Ensure the data file is in the correct location for Streamlit Cloud"""
+    cloud_path = os.path.join(DATA_PATH, CSV_FILENAME)
+    
+    # Check if data file exists in the cloud directory
+    if not os.path.exists(cloud_path) and os.path.exists(CSV_FILENAME):
+        try:
+            # Copy the file to the cloud directory
+            shutil.copy2(CSV_FILENAME, cloud_path)
+            st.success(f"Data file synced to {DATA_PATH}")
+        except Exception as e:
+            st.error(f"Error syncing data file: {e}")
+
 def load_data(filename):
     """Load data from CSV file"""
+    # For Streamlit Cloud, always try current directory first for the main data file
+    if filename == CSV_FILENAME:
+        try:
+            return pd.read_csv(filename)
+        except FileNotFoundError:
+            pass
+    
+    # Try loading from the specified data path
     try:
-        # First try to load from parent directory
         return pd.read_csv(os.path.join(DATA_PATH, filename))
     except FileNotFoundError:
         try:
@@ -32,11 +58,16 @@ def load_data(filename):
 
 def save_data(df, filename):
     """Save data to CSV file"""
-    # First check if parent directory exists
-    if os.path.exists(DATA_PATH):
+    # Make sure the directory exists
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH, exist_ok=True)
+        
+    # Save to the data path
+    try:
         df.to_csv(os.path.join(DATA_PATH, filename), index=False)
-    else:
-        # If not, save to current directory
+    except Exception as e:
+        st.error(f"Error saving file: {e}")
+        # If saving to DATA_PATH fails, try the current directory
         df.to_csv(filename, index=False)
 
 def extract_text_for_analysis(text_str):
@@ -93,18 +124,35 @@ def get_doc_types_and_topics():
 
 def initialize_evaluations():
     """Initialize or load the evaluations dataframe"""
+    # Check if evaluations file exists in the DATA_PATH
+    file_path = os.path.join(DATA_PATH, EVALUATIONS_FILENAME)
+    
     try:
-        return pd.read_csv(os.path.join(DATA_PATH, EVALUATIONS_FILENAME))
-    except FileNotFoundError:
-        # Create an empty dataframe if it doesn't exist with the new columns
+        # Try to read the file from the specified location
+        if os.path.exists(file_path):
+            return pd.read_csv(file_path)
+        
+        # If file doesn't exist, create a new DataFrame
         evaluations_df = pd.DataFrame(columns=[
             'doc_id', 'file_name',
             'doc_type_gemini', 'doc_type_deepseek', 'doc_type_chatgpt', 'selected_doc_type',
             'subject_gemini', 'subject_deepseek', 'subject_chatgpt', 'selected_subject',
             'notes', 'evaluator', 'evaluation_date'
         ])
-        evaluations_df.to_csv(os.path.join(DATA_PATH, EVALUATIONS_FILENAME), index=False)
+        
+        # Save the empty DataFrame to create the file
+        save_data(evaluations_df, EVALUATIONS_FILENAME)
         return evaluations_df
+        
+    except Exception as e:
+        st.error(f"Error initializing evaluations file: {e}")
+        # Return an empty DataFrame as fallback
+        return pd.DataFrame(columns=[
+            'doc_id', 'file_name',
+            'doc_type_gemini', 'doc_type_deepseek', 'doc_type_chatgpt', 'selected_doc_type',
+            'subject_gemini', 'subject_deepseek', 'subject_chatgpt', 'selected_subject',
+            'notes', 'evaluator', 'evaluation_date'
+        ])
 
 def save_evaluation(doc_id, doc_type, subject, notes, evaluator, doc_data):
     """Save document evaluation to the evaluations CSV"""
@@ -440,4 +488,5 @@ def main():
 
 # Run the app
 if __name__ == "__main__":
+    sync_data_file()
     main() 
