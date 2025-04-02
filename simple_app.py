@@ -223,6 +223,8 @@ def main():
         st.session_state.doc_types, st.session_state.doc_topics = get_doc_types_and_topics()
     if 'user_name' not in st.session_state:
         st.session_state.user_name = ""
+    if 'history' not in st.session_state:
+        st.session_state.history = []
     
     # App sidebar
     with st.sidebar:
@@ -314,16 +316,22 @@ def main():
                     doc_type_selection = "Other"
                 else:
                     doc_type_selection = default_doc_type
+                
+                # Show radio buttons with previously selected value
+                doc_type_selection = st.radio(
+                    "Document Type",
+                    options=doc_type_options,
+                    index=doc_type_options.index(doc_type_selection) if doc_type_selection in doc_type_options else 0,
+                    key="doc_type_radio"
+                )
             else:
-                doc_type_selection = doc_type_options[0] if doc_type_options else None
-            
-            # Show radio buttons
-            doc_type_selection = st.radio(
-                "Document Type",
-                options=doc_type_options,
-                index=doc_type_options.index(doc_type_selection) if doc_type_selection in doc_type_options else 0,
-                key="doc_type_radio"
-            )
+                # Show radio buttons with no default selection for new documents
+                doc_type_selection = st.radio(
+                    "Document Type",
+                    options=doc_type_options,
+                    index=None,
+                    key="doc_type_radio"
+                )
             
             # Show dropdown if "Other" is selected
             if doc_type_selection == "Other":
@@ -364,16 +372,22 @@ def main():
                     subject_selection = "Other"
                 else:
                     subject_selection = default_subject
+                
+                # Show radio buttons with previously selected value
+                subject_selection = st.radio(
+                    "Subject",
+                    options=subject_options,
+                    index=subject_options.index(subject_selection) if subject_selection in subject_options else 0,
+                    key="subject_radio"
+                )
             else:
-                subject_selection = subject_options[0] if subject_options else None
-            
-            # Show radio buttons
-            subject_selection = st.radio(
-                "Subject",
-                options=subject_options,
-                index=subject_options.index(subject_selection) if subject_selection in subject_options else 0,
-                key="subject_radio"
-            )
+                # Show radio buttons with no default selection for new documents
+                subject_selection = st.radio(
+                    "Subject",
+                    options=subject_options,
+                    index=None,
+                    key="subject_radio"
+                )
             
             # Show dropdown if "Other" is selected
             if subject_selection == "Other":
@@ -395,8 +409,8 @@ def main():
         notes_default = "" if existing_evaluation.empty else existing_evaluation['notes'].iloc[0]
         notes = st.text_area("Notes", value=notes_default, key="notes", height=100)
         
-        # Save button
-        col1, col2 = st.columns(2)
+        # Save and navigation buttons
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             # Determine final document type and subject
@@ -421,21 +435,53 @@ def main():
                     st.success("Evaluation saved!")
         
         with col2:
+            back_button = st.button("← Back")
+            if back_button and len(st.session_state.history) > 0:
+                st.session_state.current_index = st.session_state.history.pop()
+                st.rerun()
+                
+        with col3:
             next_button = st.button("Next →")
             if next_button:
-                if st.session_state.current_index < len(df) - 1:
-                    st.session_state.current_index += 1
-                    st.rerun()
+                # Save current index to history
+                st.session_state.history.append(st.session_state.current_index)
+                
+                # Find next unevaluated document
+                evaluated_docs = set(evaluations_df['doc_id'].values)
+                next_index = None
+                
+                # Start from the next document
+                for i in range(st.session_state.current_index + 1, len(df)):
+                    if df.iloc[i]['doc_id'] not in evaluated_docs:
+                        next_index = i
+                        break
+                
+                # If not found, loop back to the beginning
+                if next_index is None:
+                    for i in range(0, st.session_state.current_index + 1):
+                        if df.iloc[i]['doc_id'] not in evaluated_docs:
+                            next_index = i
+                            break
+                
+                # If still not found, just go to the next document
+                if next_index is None:
+                    if st.session_state.current_index < len(df) - 1:
+                        next_index = st.session_state.current_index + 1
+                    else:
+                        next_index = 0
+                
+                st.session_state.current_index = next_index
+                st.rerun()
+        
+        with col4:
+            if 'url' in doc_data and pd.notna(doc_data['url']):
+                st.write(f"**URL:** [{doc_data['url']}]({doc_data['url']})")
+                st.button("Open URL")
         
         # Document text display (moved to the bottom)
         st.subheader("Document Text")
         document_text = extract_text_for_analysis(doc_data['text'])
         st.text_area("", document_text, height=400, key="doc_text")
-        
-        if 'url' in doc_data and pd.notna(doc_data['url']):
-            st.caption(f"URL: [{doc_data['url']}]({doc_data['url']})")
-            if st.button("Open URL"):
-                st.markdown(f"<a href='{doc_data['url']}' target='_blank'>Click to open document URL</a>", unsafe_allow_html=True)
     
     elif selected_tab == "View All Evaluations":
         st.title("All Document Evaluations")
