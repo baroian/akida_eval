@@ -522,13 +522,57 @@ def main():
             )
             
             # Download button
-            csv = evaluations_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Evaluations",
-                data=csv,
-                file_name="document_evaluations_simple.csv",
-                mime="text/csv"
-            )
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                csv = evaluations_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Evaluations",
+                    data=csv,
+                    file_name="document_evaluations_simple.csv",
+                    mime="text/csv"
+                )
+            
+            with col2:
+                # Delete button with warning
+                delete_button = st.button(
+                    "Delete All Evaluations", 
+                    type="primary",
+                    use_container_width=True,
+                    key="delete_button"
+                )
+                
+                # Apply custom CSS to make the button red
+                st.markdown(
+                    """
+                    <style>
+                    div[data-testid="stButton"] button[kind="primary"] {
+                        background-color: #FF0000;
+                        color: white;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # Show warning if button is clicked
+                if delete_button:
+                    st.warning("⚠️ Warning: This will permanently delete all evaluation data. This action cannot be undone.")
+                    confirm_delete = st.button(
+                        "Yes, Delete All Evaluations", 
+                        type="primary",
+                        key="confirm_delete"
+                    )
+                    
+                    if confirm_delete:
+                        # Create empty dataframe with the same columns
+                        empty_df = pd.DataFrame(columns=evaluations_df.columns)
+                        
+                        # Save the empty dataframe to the evaluation file
+                        save_data(empty_df, EVALUATIONS_FILENAME)
+                        
+                        st.success("All evaluations have been deleted.")
+                        st.rerun()  # Refresh the page
     
     elif selected_tab == "Result Analysis":
         st.title("Result Analysis")
