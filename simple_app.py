@@ -490,6 +490,28 @@ def main():
         with col3:
             next_button = st.button("Next →")
             if next_button:
+                # First try to save the current evaluation if data is entered
+                if doc_type_selection and subject_selection:  # Only save if both are selected
+                    # Determine final document type and subject
+                    final_doc_type = custom_doc_type if doc_type_selection == "Other" else doc_type_selection
+                    final_subject = custom_subject if subject_selection == "Other" else subject_selection
+                    
+                    if not st.session_state.user_name:
+                        st.error("Please enter your name before proceeding.")
+                        st.stop()  # Stop execution to prevent navigation
+                    else:
+                        # Auto-save the evaluation
+                        save_evaluation(
+                            doc_id=doc_id,
+                            doc_type=final_doc_type,
+                            subject=final_subject,
+                            notes=notes,
+                            evaluator=st.session_state.user_name,
+                            doc_data=doc_data
+                        )
+                        
+                        st.success("Evaluation auto-saved!")
+                
                 # Find next unevaluated document
                 evaluated_docs = set(evaluations_df['doc_id'].values)
                 next_index = None
