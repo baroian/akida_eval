@@ -546,7 +546,14 @@ def main():
         
         # Document text display (moved to the bottom)
         st.subheader("Document Text")
-        document_text = extract_text_for_analysis(doc_data['text'])
+        
+        # Use text_preview column if available, otherwise fall back to extracting text
+        if 'text_preview' in doc_data and pd.notna(doc_data['text_preview']):
+            document_text = doc_data['text_preview']
+        else:
+            # Fall back to extracting text if text_preview is not available
+            document_text = extract_text_for_analysis(doc_data['text'])
+            
         st.text_area("", document_text, height=400, key="doc_text")
     
     elif selected_tab == "View All Evaluations":
